@@ -1,0 +1,123 @@
+[
+ {
+  "host": "access.status.atlassian.com",
+  "name": "Guard",
+  "components": 11,
+  "page_id": "5qmgwsxwsz78"
+ },
+ {
+  "host": "admin.status.atlassian.com",
+  "name": "Admin Experience",
+  "components": 9,
+  "page_id": "cgvlk9zzm52d"
+ },
+ {
+  "host": "analytics.status.atlassian.com",
+  "name": "Atlassian Analytics",
+  "components": 3,
+  "page_id": "n7myhlx01bgx"
+ },
+ {
+  "host": "atlas.status.atlassian.com",
+  "name": "Atlas",
+  "components": 7,
+  "page_id": "g0wcwcmyx5lr"
+ },
+ {
+  "host": "bitbucket.status.atlassian.com",
+  "name": "Atlassian Bitbucket",
+  "components": 13,
+  "page_id": "bqlf8qjztdtr"
+ },
+ {
+  "host": "compass.status.atlassian.com",
+  "name": "Compass",
+  "components": 38,
+  "page_id": "6b7xgjptl20c"
+ },
+ {
+  "host": "confluence.status.atlassian.com",
+  "name": "Confluence",
+  "components": 16,
+  "page_id": "4g2my7tbhjsq"
+ },
+ {
+  "host": "developer.status.atlassian.com",
+  "name": "Atlassian Developer",
+  "components": 53,
+  "page_id": "n8766lc3ybbs"
+ },
+ {
+  "host": "focus.status.atlassian.com",
+  "name": "Atlassian Focus",
+  "components": 10,
+  "page_id": "73c2psx3zwgf"
+ },
+ {
+  "host": "guard.status.atlassian.com",
+  "name": "Guard",
+  "components": 11,
+  "page_id": "5qmgwsxwsz78",
+  "alias_of": "access.status.atlassian.com"
+ },
+ {
+  "host": "jira-align.status.atlassian.com",
+  "name": "Jira Align",
+  "components": 66,
+  "page_id": "jrg4crndtsgz"
+ },
+ {
+  "host": "jira-product-discovery.status.atlassian.com",
+  "name": "Jira Product Discovery",
+  "components": 3,
+  "page_id": "qmzzdxyvmbmk"
+ },
+ {
+  "host": "jira-service-management.status.atlassian.com",
+  "name": "Jira Service Management",
+  "components": 13,
+  "page_id": "pv54g7ltsc24"
+ },
+ {
+  "host": "jira-software.status.atlassian.com",
+  "name": "Jira",
+  "components": 11,
+  "page_id": "7yh3h3y0c0x1"
+ },
+ {
+  "host": "jira-work-management.status.atlassian.com",
+  "name": "Jira Work Management",
+  "components": 11,
+  "page_id": "s6f0gm5gcpmy"
+ },
+ {
+  "host": "loom.status.atlassian.com",
+  "name": "Loom",
+  "components": 4,
+  "page_id": "j9r9w5bcs26w"
+ },
+ {
+  "host": "opsgenie.status.atlassian.com",
+  "name": "Opsgenie",
+  "components": 47,
+  "page_id": "t05vdsszxwtq"
+ },
+ {
+  "host": "rovo.status.atlassian.com",
+  "name": "Rovo",
+  "components": 10,
+  "page_id": "ndlwhd94j2lv"
+ },
+ {
+  "host": "talent.status.atlassian.com",
+  "name": "Talent",
+  "components": 9,
+  "page_id": "vnj20rkgztf8"
+ },
+ {
+  "host": "trello.status.atlassian.com",
+  "name": "Trello",
+  "components": 5,
+  "page_id": "h5frqhb041yq"
+ }
+]

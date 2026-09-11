@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""Collect every incident Atlassian has published, across all of its status pages.
+
+Why this exists: Atlassian does not have one status page. It has 20 live ones
+split by product, plus status.atlassian.com, which still resolves but has no
+components and no incident since March 2025. A partner whose customer reports a
+broken API has no single place to look. This builds that place.
+
+Everything here is public: Statuspage v2 endpoints, no credentials, no probing
+of anyone's site.
+
+Usage:  python collect.py [--hosts-only] [--max-pages N]
+Output: incidents.jsonl  (one incident per line)
+        hosts.json       (the status pages found, with component counts)
+"""
+import json, re, sys, os, time, urllib.request, urllib.error
+import concurrent.futures as cf
+
+UA = {"User-Agent": "atlassian-status-index/0.1 (public Statuspage API reader)"}
+OUT = os.path.dirname(os.path.abspath(__file__))
+
+# Subdomains probed for a Statuspage. Unknown ones simply 404 and are dropped,
+# so adding a guess here is cheap and wrong guesses are self-correcting.
+CANDIDATES = """status jira jira-software jira-service-management jira-work-management
+jira-product-discovery jira-align confluence bitbucket trello opsgenie statuspage compass
+atlas loom rovo guard developer marketplace admin analytics bamboo crowd fisheye sourcetree
+halp forge access identity jsm jpd jwm team-central mercury focus talent""".split()
+
+
+MONTHS = {m: n for n, m in enumerate(
+    "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(), start=1)}
+
+
+def parse_history_ts(raw, year):
+    """history.json dates are HTML fragments and carry no year.
+
+    They look like: "Sep <var data-var='date'>11</var>, <var ...>07:46</var> UTC"
+    and sometimes a range, "Apr 10, 00:30 - 01:30 UTC". The year lives on the
+    enclosing month object, so it has to be passed in. Returns an ISO-8601
+    string, or None if the shape is unfamiliar - never a half-parsed guess.
+    """
+    if not raw or not year:
+        return None
+    text = re.sub(r"<[^>]+>", "", raw)
+    m = re.match(r"\s*([A-Z][a-z]{2})\s+(\d{1,2}),\s*(\d{2}):(\d{2})", text)
+    if not m or m.group(1) not in MONTHS:
+        return None
+    mon, day, hh, mm = MONTHS[m.group(1)], int(m.group(2)), int(m.group(3)), int(m.group(4))
+    try:
+        return f"{int(year):04d}-{mon:02d}-{day:02d}T{hh:02d}:{mm:02d}:00Z"
+    except (TypeError, ValueError):
+        return None
+
+
+def fetch(url, tries=3):
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
+                return json.loads(r.read().decode("utf-8", "replace"))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            time.sleep(1 + i)
+        except Exception:
+            time.sleep(1 + i)
+    return None
+
+
+def discover():
+    def probe(sub):
+        host = f"{sub}.status.atlassian.com"
+        d = fetch(f"https://{host}/api/v2/summary.json")
+        if not d:
+            return None
+        return {"host": host,
+                "name": d["page"]["name"],
+                "components": len(d.get("components", [])),
+                "page_id": d["page"]["id"]}
+    found = []
+    with cf.ThreadPoolExecutor(16) as ex:
+        for r in ex.map(probe, CANDIDATES):
+            if r:
+                found.append(r)
+    # Distinct pages only: access./guard. are the same page under two names.
+    seen, uniq = set(), []
+    for h in sorted(found, key=lambda x: x["host"]):
+        if h["page_id"] in seen:
+            h["alias_of"] = next(u["host"] for u in uniq if u["page_id"] == h["page_id"])
+        else:
+            seen.add(h["page_id"])
+        uniq.append(h)
+    return uniq
+
+
+def incidents_for(host, max_pages):
+    """Recent incidents from the v2 API, then the deeper /history.json archive.
+
+    The two overlap; de-duplication is by incident id, and the v2 record wins
+    because it carries the update timeline that history.json omits.
+    """
+    by_id = {}
+    d = fetch(f"https://{host}/api/v2/incidents.json")
+    for i in (d or {}).get("incidents", []):
+        by_id[i["id"]] = {
+            "host": host, "id": i["id"], "name": i["name"],
+            "impact": i.get("impact"), "status": i.get("status"),
+            "created_at": i.get("created_at"), "started_at": i.get("started_at"),
+            "resolved_at": i.get("resolved_at"), "shortlink": i.get("shortlink"),
+            "components": [c["name"] for c in i.get("components", [])],
+            "updates": [{"at": u["created_at"], "status": u["status"],
+                         "body": " ".join(u["body"].split())}
+                        for u in i.get("incident_updates", [])],
+            "source": "v2",
+        }
+    page, empty_pages = 1, 0
+    while page <= max_pages and empty_pages < 2:
+        h = fetch(f"https://{host}/history.json?page={page}")
+        months = (h or {}).get("months", [])
+        got = 0
+        for m in months:
+            year = m.get("year")
+            for i in m.get("incidents", []):
+                got += 1
+                if i["code"] in by_id:
+                    continue
+                by_id[i["code"]] = {
+                    "host": host, "id": i["code"], "name": i.get("name"),
+                    "impact": i.get("impact"), "status": "resolved",
+                    "created_at": parse_history_ts(i.get("timestamp"), year),
+                    "started_at": parse_history_ts(i.get("timestamp"), year),
+                    "resolved_at": None, "shortlink": None,
+                    "components": [], "updates": [],
+                    "raw_timestamp": i.get("timestamp"), "source": "history",
+                }
+        empty_pages = empty_pages + 1 if got == 0 else 0
+        page += 1
+    return list(by_id.values())
+
+
+def main():
+    max_pages = 40
+    if "--max-pages" in sys.argv:
+        max_pages = int(sys.argv[sys.argv.index("--max-pages") + 1])
+
+    hosts = discover()
+    live = [h for h in hosts if "alias_of" not in h]
+    json.dump(hosts, open(os.path.join(OUT, "hosts.json"), "w"), indent=1)
+    print(f"status pages: {len(hosts)} probed hostnames, {len(live)} distinct pages")
+    if "--hosts-only" in sys.argv:
+        return
+
+    rows = []
+    with cf.ThreadPoolExecutor(8) as ex:
+        futs = {ex.submit(incidents_for, h["host"], max_pages): h["host"] for h in live}
+        for f in cf.as_completed(futs):
+            got = f.result()
+            rows += got
+            print(f"  {futs[f]:<46} {len(got)} incidents")
+
+    rows.sort(key=lambda r: (r.get("created_at") or ""))
+    with open(os.path.join(OUT, "incidents.jsonl"), "w", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+    dated = [r["created_at"][:10] for r in rows if r.get("created_at")]
+    print(f"\ntotal incidents: {len(rows)}")
+    if dated:
+        print(f"range: {min(dated)} .. {max(dated)}")
+
+
+if __name__ == "__main__":
+    main()
