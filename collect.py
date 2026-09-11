@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 """Collect every incident Atlassian has published, across all of its status pages.
 
+Two modes.
+
+Full (default) rebuilds from scratch: the v2 API for recent incidents plus the
+deeper history.json archive, back as far as it goes.
+
+Incremental (--incremental) keeps what is already in incidents.jsonl and re-reads
+only the v2 feeds. It is what the hourly job runs. Its real purpose is not speed:
+it is that a status page can be edited after the fact, and an incident can be
+withdrawn. Each run compares what a page says now against what it said before and
+appends any difference to changes.jsonl. Git keeps the rest - the record of what
+was published cannot be quietly revised once it is in the commit history.
+
 Why this exists: Atlassian does not have one status page. It has 20 live ones
 split by product, plus status.atlassian.com, which still resolves but has no
 components and no incident since March 2025. A partner whose customer reports a
@@ -137,6 +149,116 @@ def incidents_for(host, max_pages):
     return list(by_id.values())
 
 
+def fingerprint(rec):
+    """The parts of an incident whose change is worth recording.
+
+    Deliberately excludes first_seen/last_seen, which change every run, and
+    excludes ordering of components, which the API does not guarantee.
+    """
+    return {
+        "name": rec.get("name"),
+        "impact": rec.get("impact"),
+        "status": rec.get("status"),
+        "started_at": rec.get("started_at"),
+        "resolved_at": rec.get("resolved_at"),
+        "components": sorted(rec.get("components") or []),
+        "updates": [(u["at"], u["status"], u["body"]) for u in rec.get("updates") or []],
+    }
+
+
+def load_existing(path):
+    if not os.path.exists(path):
+        return {}
+    out = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                r = json.loads(line)
+                out[(r["host"], r["id"])] = r
+    return out
+
+
+def incremental(hosts, now):
+    """Re-read the v2 feeds, merge into the existing file, log what changed."""
+    inc_path = os.path.join(OUT, "incidents.jsonl")
+    chg_path = os.path.join(OUT, "changes.jsonl")
+    existing = load_existing(inc_path)
+    if not existing:
+        sys.exit("incidents.jsonl is empty - run a full collect first")
+
+    fresh = {}
+    with cf.ThreadPoolExecutor(8) as ex:
+        futs = {ex.submit(v2_only, h["host"]): h["host"] for h in hosts}
+        for f in cf.as_completed(futs):
+            for r in f.result():
+                fresh[(r["host"], r["id"])] = r
+
+    changes, added = [], 0
+    for key, new in fresh.items():
+        old = existing.get(key)
+        if old is None:
+            new["first_seen"] = now
+            new["last_seen"] = now
+            existing[key] = new
+            added += 1
+            continue
+        before, after = fingerprint(old), fingerprint(new)
+        old["last_seen"] = now
+        if before != after:
+            changed = sorted(k for k in after if before.get(k) != after.get(k))
+            changes.append({"at": now, "host": key[0], "id": key[1],
+                            "fields": changed, "before": before, "after": after})
+            old.update({k: new[k] for k in
+                        ("name", "impact", "status", "started_at", "resolved_at",
+                         "components", "updates")})
+            old["last_changed"] = now
+
+    # An incident present in a feed before and absent now is worth a line of its
+    # own. It may simply have aged past the 50-item window, so this is recorded
+    # as an observation, never asserted as a withdrawal.
+    seen_hosts = {h["host"] for h in hosts}
+    for key, rec in existing.items():
+        stale = (key[0] in seen_hosts and key not in fresh
+                 and rec.get("last_seen") and rec.get("last_seen") != now
+                 and not rec.get("left_feed_at"))
+        if stale:
+            rec["left_feed_at"] = now
+
+    rows = sorted(existing.values(), key=lambda r: (r.get("created_at") or "", r["host"]))
+    with open(inc_path, "w", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    if changes:
+        with open(chg_path, "a", encoding="utf-8") as fh:
+            for c in changes:
+                fh.write(json.dumps(c, ensure_ascii=False) + "\n")
+
+    print(f"incidents: {len(rows)} total, {added} new")
+    print(f"edits to already-published incidents: {len(changes)}")
+    for c in changes[:10]:
+        print(f"  {c['host'].split('.')[0]:<24} {c['id']}  changed: {', '.join(c['fields'])}")
+
+
+def v2_only(host):
+    d = fetch(f"https://{host}/api/v2/incidents.json")
+    out = []
+    for i in (d or {}).get("incidents", []):
+        out.append({
+            "host": host, "id": i["id"], "name": i["name"],
+            "impact": i.get("impact"), "status": i.get("status"),
+            "created_at": i.get("created_at"), "started_at": i.get("started_at"),
+            "resolved_at": i.get("resolved_at"), "shortlink": i.get("shortlink"),
+            "components": [c["name"] for c in i.get("components", [])],
+            "updates": [{"at": u["created_at"], "status": u["status"],
+                         "body": " ".join(u["body"].split())}
+                        for u in i.get("incident_updates", [])],
+            "source": "v2",
+        })
+    return out
+
+
+
 def main():
     max_pages = 40
     if "--max-pages" in sys.argv:
@@ -148,6 +270,10 @@ def main():
     print(f"status pages: {len(hosts)} probed hostnames, {len(live)} distinct pages")
     if "--hosts-only" in sys.argv:
         return
+
+    if "--incremental" in sys.argv:
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        return incremental(live, now)
 
     rows = []
     with cf.ThreadPoolExecutor(8) as ex:

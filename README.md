@@ -87,6 +87,30 @@ Stated plainly, because a record that overstates itself is worse than none.
 - **`access.` and `guard.` are the same page** under two names, de-duplicated by
   Statuspage page id. There may be other aliases.
 
+## The record, not just the data
+
+The index is collected hourly by a GitHub Action. That is not for freshness. It
+is because a status page can be edited after publication, and an incident can be
+withdrawn — which is precisely the complaint that prompted this.
+
+Each run re-reads the live feeds and compares them against what was stored.
+Differences are appended to `changes.jsonl` with both the before and after, and
+the commit history keeps the rest. Once a version is committed it cannot be
+quietly revised.
+
+The first incremental run, minutes after the initial build, already caught two
+incidents changing from ongoing to resolved. That is the mechanism working, not
+a finding.
+
+Two honest notes on the fields it adds:
+
+- `first_seen` exists only for incidents that appeared while the collector was
+  running. Everything from the initial build lacks it, because we genuinely do
+  not know when it was first published.
+- `left_feed_at` records that an incident stopped appearing in a page's feed. The
+  v2 API returns only the 50 most recent per page, so ageing out is the ordinary
+  explanation and the field is an observation, never a claim of withdrawal.
+
 ## Data
 
 `incidents.jsonl`, one JSON object per line:
