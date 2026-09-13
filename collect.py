@@ -199,12 +199,10 @@ def incremental(hosts, now):
         old = existing.get(key)
         if old is None:
             new["first_seen"] = now
-            new["last_seen"] = now
             existing[key] = new
             added += 1
             continue
         before, after = fingerprint(old), fingerprint(new)
-        old["last_seen"] = now
         if before != after:
             changed = sorted(k for k in after if before.get(k) != after.get(k))
             changes.append({"at": now, "host": key[0], "id": key[1],
@@ -217,13 +215,30 @@ def incremental(hosts, now):
     # An incident present in a feed before and absent now is worth a line of its
     # own. It may simply have aged past the 50-item window, so this is recorded
     # as an observation, never asserted as a withdrawal.
-    seen_hosts = {h["host"] for h in hosts}
-    for key, rec in existing.items():
-        stale = (key[0] in seen_hosts and key not in fresh
-                 and rec.get("last_seen") and rec.get("last_seen") != now
-                 and not rec.get("left_feed_at"))
-        if stale:
-            rec["left_feed_at"] = now
+    # Feed membership is tracked in a small separate file rather than as a
+    # timestamp on every incident. A per-incident "last seen" changes on every
+    # run, so every commit rewrote all ~720 v2 rows and a real edit would have
+    # been buried in noise. This file changes only when an incident actually
+    # enters or leaves a feed.
+    state_path = os.path.join(OUT, "feed_state.json")
+    previous = json.load(open(state_path)) if os.path.exists(state_path) else {}
+    current = {}
+    for host, iid in fresh:
+        current.setdefault(host, []).append(iid)
+    current = {h: sorted(ids) for h, ids in sorted(current.items())}
+    departed = 0
+    for host, ids in previous.items():
+        if host not in current:
+            continue          # a failed fetch is not a departure
+        gone = set(ids) - set(current[host])
+        for iid in gone:
+            rec = existing.get((host, iid))
+            if rec is not None and not rec.get("left_feed_at"):
+                rec["left_feed_at"] = now
+                departed += 1
+    with open(state_path, "w", encoding="utf-8") as fh:
+        json.dump(current, fh, indent=1, sort_keys=True)
+        fh.write("\n")
 
     rows = sorted(existing.values(), key=lambda r: (r.get("created_at") or "", r["host"]))
     with open(inc_path, "w", encoding="utf-8") as fh:
@@ -236,6 +251,7 @@ def incremental(hosts, now):
 
     print(f"incidents: {len(rows)} total, {added} new")
     print(f"edits to already-published incidents: {len(changes)}")
+    print(f"incidents that left a feed: {departed}")
     for c in changes[:10]:
         print(f"  {c['host'].split('.')[0]:<24} {c['id']}  changed: {', '.join(c['fields'])}")
 

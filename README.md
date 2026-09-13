@@ -89,7 +89,7 @@ Stated plainly, because a record that overstates itself is worse than none.
 
 ## The record, not just the data
 
-The index is collected hourly by a GitHub Action. That is not for freshness. It
+The index is collected on a schedule by a GitHub Action. That is not for freshness. It
 is because a status page can be edited after publication, and an incident can be
 withdrawn — which is precisely the complaint that prompted this.
 
@@ -102,14 +102,29 @@ The first incremental run, minutes after the initial build, already caught two
 incidents changing from ongoing to resolved. That is the mechanism working, not
 a finding.
 
-Two honest notes on the fields it adds:
+Notes on what the collector adds, including two things I got wrong at first:
 
+- **It is not hourly.** The schedule asks for hourly. Over the first 41 hours
+  GitHub ran it 12 times — a median of one run every 3.4 hours, the longest gap
+  5.2 hours. GitHub deprioritises scheduled jobs on low-activity repositories.
+  An edit that is made and reverted inside a few hours can be missed.
+- **The first version recorded noise.** It stamped a `last_seen` time on every
+  incident on every run, so each of the first 12 commits rewrote all ~720 rows
+  and contained no real edit at all. A genuine change would have been buried.
+  That field is gone; feed membership now lives in `feed_state.json`, which
+  changes only when an incident actually enters or leaves a feed. A run where
+  nothing happened now produces an empty diff and no commit.
 - `first_seen` exists only for incidents that appeared while the collector was
   running. Everything from the initial build lacks it, because we genuinely do
   not know when it was first published.
 - `left_feed_at` records that an incident stopped appearing in a page's feed. The
   v2 API returns only the 50 most recent per page, so ageing out is the ordinary
   explanation and the field is an observation, never a claim of withdrawal.
+
+In those first 41 hours Atlassian declared no new incident on any of its
+nineteen pages, confirmed against the live feeds directly rather than trusted
+from the collector. That is a quiet stretch, not a finding: at this year's rate
+of roughly one a day, two days without one is unremarkable.
 
 ## Data
 
@@ -121,7 +136,7 @@ shortlink, components[], updates[{at,status,body}], source, raw_timestamp
 ```
 
 `hosts.json` lists the status pages found, their display names and component
-counts.
+counts. `feed_state.json` holds the incident ids currently in each page's feed.
 
 ## Corrections
 
