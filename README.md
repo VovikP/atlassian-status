@@ -126,6 +126,37 @@ nineteen pages, confirmed against the live feeds directly rather than trusted
 from the collector. That is a quiet stretch, not a finding: at this year's rate
 of roughly one a day, two days without one is unremarkable.
 
+## Published uptime
+
+```bash
+python uptime.py
+python uptime.py --component yjqnzm0tkgsd --host developer.status.atlassian.com
+```
+
+Read on 13 September 2026, from the same endpoint the status pages use to draw
+their 90-day bars (`/uptime_showcase`):
+
+- **The core products publish no uptime at all.** Confluence, Jira Software,
+  Jira Service Management and Jira Work Management show a figure for none of
+  their components.
+- **Where a figure is shown, it is almost always perfect.** 155 components
+  publish a 90-day uptime; 149 of them read exactly 100.0%. The lowest is 97.72%.
+- **Confluence Cloud APIs**, on the partner-facing developer page, reads 100.0%
+  for 90, 60 and 30 days. In that window its own timeline attaches eight declared
+  events, including one Atlassian rated critical, and records zero outage minutes
+  on every one of them.
+
+On 1-2 September a partner reported a Confluence Cloud REST endpoint returning
+503 for about twelve hours, confirmed as an active incident by Atlassian support.
+The component's timeline records no outage on either day. Had those twelve hours
+counted as a full outage, the 30-day figure could not exceed 98.3%. It was one
+endpoint rather than the whole API, so the true effect is smaller - but the
+published number did not move at all.
+
+What this shows is how the figure is computed: from outages declared against a
+component, not from incidents, and not from anything measured. It is not
+evidence of what the uptime actually was.
+
 ## Data
 
 `incidents.jsonl`, one JSON object per line:
