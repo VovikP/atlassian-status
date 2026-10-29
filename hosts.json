@@ -1,23 +1,5 @@
 [
  {
-  "host": "access.status.atlassian.com",
-  "name": "Guard",
-  "components": 11,
-  "page_id": "5qmgwsxwsz78"
- },
- {
-  "host": "admin.status.atlassian.com",
-  "name": "Admin Experience",
-  "components": 10,
-  "page_id": "cgvlk9zzm52d"
- },
- {
-  "host": "analytics.status.atlassian.com",
-  "name": "Atlassian Analytics",
-  "components": 5,
-  "page_id": "n7myhlx01bgx"
- },
- {
   "host": "atlas.status.atlassian.com",
   "name": "Atlas",
   "components": 7,
@@ -48,23 +30,10 @@
   "page_id": "n8766lc3ybbs"
  },
  {
-  "host": "focus.status.atlassian.com",
-  "name": "Atlassian Focus",
-  "components": 10,
-  "page_id": "73c2psx3zwgf"
- },
- {
   "host": "guard.status.atlassian.com",
   "name": "Guard",
   "components": 11,
-  "page_id": "5qmgwsxwsz78",
-  "alias_of": "access.status.atlassian.com"
- },
- {
-  "host": "jira-align.status.atlassian.com",
-  "name": "Jira Align",
-  "components": 66,
-  "page_id": "jrg4crndtsgz"
+  "page_id": "5qmgwsxwsz78"
  },
  {
   "host": "jira-product-discovery.status.atlassian.com",
@@ -107,12 +76,6 @@
   "name": "Rovo",
   "components": 10,
   "page_id": "ndlwhd94j2lv"
- },
- {
-  "host": "talent.status.atlassian.com",
-  "name": "Talent",
-  "components": 9,
-  "page_id": "vnj20rkgztf8"
  },
  {
   "host": "trello.status.atlassian.com",
