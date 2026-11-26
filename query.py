@@ -32,7 +32,8 @@ def show(rows, limit):
         print("no declared incidents matched")
         return
     for r in rows[:limit]:
-        print(f"{r['created_at'][:16]}  {(r['impact'] or '?'):<9} {short(r['host']):<24} {r['name']}")
+        note = "  (opened before the window)" if r.get("_before") else ""
+        print(f"{r['created_at'][:16]}  {(r['impact'] or '?'):<9} {short(r['host']):<24} {r['name']}{note}")
         if r.get("components"):
             print(f"{'':18}  components: {', '.join(r['components'][:6])}"
                   + (f" (+{len(r['components'])-6} more)" if len(r["components"]) > 6 else ""))
@@ -71,8 +72,15 @@ def main():
         return stats(rows)
 
     if a.window:
+        # Open at any point in the window, not only opened inside it: an
+        # incident declared the evening before still answers "did they say
+        # anything". history.json rows have no resolved_at, so for them only
+        # the opening time is known.
         lo, hi = a.window
-        rows = [r for r in rows if lo <= r["created_at"] <= hi]
+        rows = [r for r in rows if r["created_at"] <= hi
+                and (r.get("resolved_at") or r["created_at"]) >= lo]
+        for r in rows:
+            r["_before"] = r["created_at"] < lo
     if a.since:
         rows = [r for r in rows if r["created_at"] >= a.since]
     if a.impact:
