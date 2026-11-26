@@ -35,6 +35,28 @@ python query.py --page confluence --impact major
 
 The window query is the one that matters. Given a time a customer reported
 trouble, it answers: did Atlassian declare anything, anywhere, around then.
+It lists every incident that was open at any point in the window, including
+ones opened earlier and still running (marked "opened before the window").
+Old `history.json` rows have no resolution time, so for them only the opening
+time can be matched.
+
+## Partner reports
+
+To put an outage you saw next to what was declared:
+
+```bash
+python report.py add --product confluence --start 2026-09-01T18:55 \
+    --end 2026-09-02T06:32 --status 503 --endpoint /wiki/rest/api/... --reporter you
+python report.py check
+```
+
+`check` marks each report "declared" if an incident naming the product was
+open on that product's status page or the developer page during the window
+(with two hours of slack for slow declarations), "different subject" for other
+overlapping incidents, and "NOT DECLARED" otherwise. A match does not prove it
+was the same failure. Reports are stored in `reports.jsonl`, which is not
+committed. In Git Bash, set `MSYS_NO_PATHCONV=1` or the endpoint path gets
+rewritten into a Windows path.
 
 ## What the index shows
 
